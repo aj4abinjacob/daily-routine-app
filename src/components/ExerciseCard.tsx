@@ -27,17 +27,17 @@ interface Props {
   onLogSaved: (log: ExerciseLog) => void;
   expanded: boolean;
   onToggle: () => void;
+  loggedThisSession?: boolean;
 }
 
-export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved, expanded, onToggle }: Props) {
+export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved, expanded, onToggle, loggedThisSession = false }: Props) {
   const [showInfo, setShowInfo] = useState(false);
   const effectiveWeight = getEffectiveWeight(exercise, log);
   const defaultWeight = getEffectiveWeight(exercise, null);
   const isProgressed = effectiveWeight !== defaultWeight;
 
   const workingSets = exercise.sets.filter((s) => s.type === 'working');
-  const lastSession = log?.logs?.[log.logs.length - 1];
-  const hasLog = !!lastSession;
+  const hasLog = loggedThisSession;
 
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);

@@ -121,6 +121,7 @@ export default function WorkoutScreen({ day }: Props) {
           onLogSaved={(newLog) => handleLogSaved(i, newLog)}
           expanded={expandedIndex === i}
           onToggle={() => setExpandedIndex(expandedIndex === i ? null : i)}
+          loggedThisSession={dirtyIndices.has(i)}
         />
       ))}
 
