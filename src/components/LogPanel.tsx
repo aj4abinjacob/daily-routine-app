@@ -65,6 +65,9 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     new Array(allSets.length).fill(false)
   );
 
+  // Track whether we've created a session entry in storage
+  const sessionRef = useRef(false);
+
   // Rest timer
   const [timerActive, setTimerActive] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -123,29 +126,8 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     setTimerSeconds((prev) => prev + extra);
   };
 
-  /** Log a single set — persists to storage immediately */
-  const handleLogSet = async (index: number) => {
-    const r = parseInt(repsInputs[index]);
-    const w = parseFloat(weightInputs[index]);
-    if (!r || r <= 0) {
-      setFeedback('Enter reps');
-      setFeedbackType('error');
-      return;
-    }
-    if (isNaN(w)) {
-      setFeedback('Enter weight');
-      setFeedbackType('error');
-      return;
-    }
-
-    setFeedback(null);
-
-    // Mark this set as logged
-    const nextLogged = [...loggedSets];
-    nextLogged[index] = true;
-    setLoggedSets(nextLogged);
-
-    // Build the full set list from all currently logged sets (including this one)
+  /** Persist the current logged sets to storage */
+  const persistSession = async (nextLogged: boolean[]) => {
     const sets: SetLog[] = [];
     for (let i = 0; i < allSets.length; i++) {
       if (!nextLogged[i]) continue;
@@ -156,18 +138,24 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       });
     }
 
-    // Build or update the current session in storage
     const data: ExerciseLog = log
       ? { ...log, logs: [...log.logs] }
       : { logs: [], currentWeight: null };
 
-    // If this is the first set logged, create a new session entry
-    // Otherwise update the last session (the one we're building)
-    const isFirstSet = nextLogged.filter(Boolean).length === 1;
-    if (isFirstSet) {
+    const loggedCount = nextLogged.filter(Boolean).length;
+
+    if (loggedCount === 0) {
+      // All sets undone — remove the in-progress session
+      if (data.logs.length > 0 && sessionRef.current) {
+        data.logs.pop();
+      }
+      sessionRef.current = false;
+    } else if (!sessionRef.current) {
+      // First set logged — create a new session
       data.logs.push({ date: new Date().toISOString(), sets });
+      sessionRef.current = true;
     } else {
-      // Replace the in-progress session
+      // Update the in-progress session
       data.logs[data.logs.length - 1] = {
         date: data.logs[data.logs.length - 1]?.date ?? new Date().toISOString(),
         sets,
@@ -175,7 +163,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     }
     if (data.logs.length > 8) data.logs = data.logs.slice(-8);
 
-    // Check if all working sets are now logged → check progression
+    // Check progression when all working sets are logged
     const allWorkingIndices = allSets
       .map((s, i) => (s.type === 'working' ? i : -1))
       .filter((i) => i >= 0);
@@ -193,11 +181,44 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
 
     await saveLog(dayId, exIndex, data);
     onLogSaved(data);
+  };
+
+  /** Log a single set */
+  const handleLogSet = async (index: number) => {
+    const r = parseInt(repsInputs[index]);
+    const w = parseFloat(weightInputs[index]);
+    if (!r || r <= 0) {
+      setFeedback('Enter reps');
+      setFeedbackType('error');
+      return;
+    }
+    if (isNaN(w)) {
+      setFeedback('Enter weight');
+      setFeedbackType('error');
+      return;
+    }
+
+    setFeedback(null);
+    const nextLogged = [...loggedSets];
+    nextLogged[index] = true;
+    setLoggedSets(nextLogged);
+
+    await persistSession(nextLogged);
 
     // Start rest timer (unless it's the last set)
     if (index < allSets.length - 1) {
       startTimer(index);
     }
+  };
+
+  /** Undo a logged set — re-enables inputs for correction */
+  const handleUndoSet = async (index: number) => {
+    setFeedback(null);
+    const nextLogged = [...loggedSets];
+    nextLogged[index] = false;
+    setLoggedSets(nextLogged);
+
+    await persistSession(nextLogged);
   };
 
   const handleNewSession = () => {
@@ -208,6 +229,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
         s.type === 'working' ? String(getEffectiveWeight(exercise, log)) : parseWeight(s.weight)
       )
     );
+    sessionRef.current = false;
     setFeedback(null);
     skipTimer();
   };
@@ -367,25 +389,32 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
               </Text>
             )}
 
-            {/* Log set button */}
-            {isActive && (
-              <TouchableOpacity
-                style={[
-                  styles.logSetBtn,
-                  set.type === 'warmup' && styles.logSetBtnWarmup,
-                  set.type === 'feeler' && styles.logSetBtnFeeler,
-                  set.type === 'working' && styles.logSetBtnWorking,
-                ]}
-                onPress={() => handleLogSet(i)}
-                activeOpacity={0.7}
-              >
-                <Text style={[
-                  styles.logSetBtnText,
-                  set.type === 'warmup' && styles.logSetBtnTextWarmup,
-                  set.type === 'feeler' && styles.logSetBtnTextFeeler,
-                ]}>Log</Text>
-              </TouchableOpacity>
-            )}
+            {/* Log / Undo button */}
+            <TouchableOpacity
+              style={[
+                styles.logSetBtn,
+                isLogged
+                  ? styles.logSetBtnUndo
+                  : set.type === 'warmup'
+                  ? styles.logSetBtnWarmup
+                  : set.type === 'feeler'
+                  ? styles.logSetBtnFeeler
+                  : styles.logSetBtnWorking,
+              ]}
+              onPress={() => isLogged ? handleUndoSet(i) : handleLogSet(i)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.logSetBtnText,
+                isLogged
+                  ? styles.logSetBtnTextUndo
+                  : set.type === 'warmup'
+                  ? styles.logSetBtnTextWarmup
+                  : set.type === 'feeler'
+                  ? styles.logSetBtnTextFeeler
+                  : null,
+              ]}>{isLogged ? 'Undo' : 'Log'}</Text>
+            </TouchableOpacity>
           </View>
         );
       })}
@@ -689,6 +718,11 @@ const styles = StyleSheet.create({
   logSetBtnWorking: {
     backgroundColor: colors.green,
   },
+  logSetBtnUndo: {
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   logSetBtnText: {
     fontSize: 12,
     fontWeight: '800',
@@ -699,6 +733,9 @@ const styles = StyleSheet.create({
   },
   logSetBtnTextFeeler: {
     color: '#1a0e30',
+  },
+  logSetBtnTextUndo: {
+    color: colors.textMuted,
   },
 
   // Last session
