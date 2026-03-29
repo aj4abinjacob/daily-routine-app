@@ -5,9 +5,10 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { WorkoutDay } from '../data/exercises';
-import { ExerciseLog, loadAllLogsForDay } from '../utils/storage';
+import { ExerciseLog, loadAllLogsForDay, saveLog } from '../utils/storage';
 import { colors } from '../theme';
 import ExerciseCard from '../components/ExerciseCard';
 
@@ -19,10 +20,14 @@ export default function WorkoutScreen({ day }: Props) {
   const [logs, setLogs] = useState<(ExerciseLog | null)[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [dirtyIndices, setDirtyIndices] = useState<Set<number>>(new Set());
+  const [saved, setSaved] = useState(false);
 
   const loadLogs = useCallback(async () => {
     const data = await loadAllLogsForDay(day.id, day.exercises.length);
     setLogs(data);
+    setDirtyIndices(new Set());
+    setSaved(false);
   }, [day.id, day.exercises.length]);
 
   useEffect(() => {
@@ -41,7 +46,30 @@ export default function WorkoutScreen({ day }: Props) {
       next[exIndex] = newLog;
       return next;
     });
+    setDirtyIndices((prev) => new Set(prev).add(exIndex));
+    setSaved(false);
   };
+
+  const handleSaveSession = async () => {
+    const promises: Promise<void>[] = [];
+    dirtyIndices.forEach((idx) => {
+      const log = logs[idx];
+      if (log) {
+        promises.push(saveLog(day.id, idx, log));
+      }
+    });
+    await Promise.all(promises);
+    setDirtyIndices(new Set());
+    setSaved(true);
+  };
+
+  const hasDirty = dirtyIndices.size > 0;
+
+  // Count exercises that have at least one set logged this session (dirty)
+  const dirtyWithSets = Array.from(dirtyIndices).filter((idx) => {
+    const log = logs[idx];
+    return log?.logs?.length && log.logs[log.logs.length - 1]?.sets?.length;
+  }).length;
 
   const loggedCount = logs.filter((l) => l?.logs?.length).length;
   const total = day.exercises.length;
@@ -96,6 +124,26 @@ export default function WorkoutScreen({ day }: Props) {
         />
       ))}
 
+      {/* Save Session button */}
+      {hasDirty && !saved && (
+        <TouchableOpacity
+          style={styles.saveBtn}
+          onPress={handleSaveSession}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.saveBtnText}>Save Session</Text>
+          <Text style={styles.saveBtnSub}>
+            {dirtyWithSets} exercise{dirtyWithSets !== 1 ? 's' : ''} logged
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {saved && (
+        <View style={styles.savedBanner}>
+          <Text style={styles.savedText}>Session saved</Text>
+        </View>
+      )}
+
       <View style={{ height: 30 }} />
     </ScrollView>
   );
@@ -140,5 +188,37 @@ const styles = StyleSheet.create({
   progressFill: {
     height: '100%',
     borderRadius: 2,
+  },
+  saveBtn: {
+    backgroundColor: colors.green,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#000',
+  },
+  saveBtnSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.5)',
+    marginTop: 2,
+  },
+  savedBanner: {
+    backgroundColor: 'rgba(52,211,153,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.25)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  savedText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.green,
   },
 });

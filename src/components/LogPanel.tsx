@@ -8,7 +8,7 @@ import {
   Vibration,
 } from 'react-native';
 import { Exercise, ExerciseSet } from '../data/exercises';
-import { ExerciseLog, SetLog, saveLog } from '../utils/storage';
+import { ExerciseLog, SetLog } from '../utils/storage';
 import { checkProgression, getEffectiveWeight } from '../utils/progression';
 import { suggestNextSet, findNextWorkingSetIndex, isBWExercise } from '../utils/suggestion';
 import { colors } from '../theme';
@@ -183,7 +183,6 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       }
     }
 
-    await saveLog(dayId, exIndex, data);
     onLogSaved(data);
   };
 

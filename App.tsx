@@ -5,11 +5,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { workoutDays } from './src/data/exercises';
 import HomeScreen from './src/screens/HomeScreen';
 import WorkoutScreen from './src/screens/WorkoutScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 import { colors } from './src/theme';
 
 type RootStackParamList = {
   Home: undefined;
   Workout: { dayIndex: number };
+  History: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -54,6 +56,11 @@ export default function App() {
             return <WorkoutScreen day={day} />;
           }}
         </Stack.Screen>
+        <Stack.Screen
+          name="History"
+          component={HistoryScreen}
+          options={{ title: 'Workout History' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

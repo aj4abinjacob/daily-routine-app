@@ -7,6 +7,7 @@ import { colors } from '../theme';
 type RootStackParamList = {
   Home: undefined;
   Workout: { dayIndex: number };
+  History: undefined;
 };
 
 interface Props {
@@ -48,6 +49,14 @@ export default function HomeScreen({ navigation }: Props) {
           </TouchableOpacity>
         );
       })}
+      {/* History button */}
+      <TouchableOpacity
+        style={styles.historyBtn}
+        activeOpacity={0.7}
+        onPress={() => navigation.navigate('History')}
+      >
+        <Text style={styles.historyBtnText}>Workout History</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -117,5 +126,19 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.textMuted,
     marginLeft: 8,
+  },
+  historyBtn: {
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+  },
+  historyBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textDim,
   },
 });
