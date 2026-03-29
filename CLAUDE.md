@@ -45,6 +45,7 @@ eas build --platform android --profile preview
 ### Utils
 - `src/utils/storage.ts` — AsyncStorage wrapper. Keys are `wlog_{dayId}_{exIndex}`. Stores `ExerciseLog` objects with session history (last 8) and current progressed weight.
 - `src/utils/progression.ts` — Progression logic. `checkProgression()` checks if latest logged session meets the exercise's progression criteria (specific rule or generic top-of-range). `getEffectiveWeight()` returns the current working weight considering any stored progression.
+- `src/utils/suggestion.ts` — RPE-based next set suggestion. `suggestNextSet()` predicts weight/reps for the next working set after logging one. Uses RPE→RIR conversion, 5% inter-set fatigue, and rep range clamping. Drops weight by 2.5 kg if predicted reps fall below rep range minimum.
 
 ### Theme
 - `src/theme.ts` — Color palette and helper functions. Dark theme matching the original web app: amber=primary, green=working/positive, blue=warmup/info, orange=tips, red=warnings, purple=cooldown.
@@ -54,6 +55,7 @@ eas build --platform android --profile preview
 - Exercise data is static TypeScript (not fetched from API). Edit `src/data/exercises.ts` to change exercises.
 - Workout logs persist in AsyncStorage with keys `wlog_{dayId}_{exIndex}`.
 - Progression rules are parsed from exercise data: `{ targetReps: [8,8,8], nextWeight: 45 }`. Generic fallback: all sets hit `repRange[1]` (top of range) -> +2.5 kg.
+- After logging a working set, `LogPanel` calls `suggestNextSet()` to auto-fill the next working set's weight/reps. Suggested inputs show amber borders and an "auto" label; cleared on manual edit or undo.
 - `ExerciseCard` manages its own expanded/collapsed state. `LogPanel` open/close is independent.
 - `WorkoutScreen` owns the logs state and passes down to children. `onLogSaved` callback updates parent state.
 - Tab navigation uses `@react-navigation/bottom-tabs`. Initial route auto-selected by day of week.

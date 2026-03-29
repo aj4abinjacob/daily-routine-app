@@ -15,6 +15,7 @@ React Native (Expo) workout tracker for a **4-Day Upper/Lower Cutting Programme*
 - **Exercise cards** with set tables (weight, reps, rest, RPE, type), research notes, and form cues
 - **Workout logging** — log reps and weight for each working set, saved to device storage
 - **Auto-progression** — when you hit your rep targets (e.g., 8-8-8), weight auto-increases for the next session based on exercise-specific rules or a generic +2.5 kg fallback
+- **RPE-based next set suggestion** — after logging a working set, the next working set auto-fills with predicted weight and reps based on RPE targets, inter-set fatigue, and rep range constraints
 - **Session history** — shows your last session's performance per exercise (keeps last 8 sessions)
 - **Visual indicators** — checkmark on logged exercises, arrow when weight has been progressed
 - **Dark theme** matching the original web app design
@@ -70,6 +71,7 @@ src/
   utils/
     storage.ts                 — AsyncStorage helpers (save/load per exercise)
     progression.ts             — Auto-progression logic (parses rules, checks criteria)
+    suggestion.ts              — RPE-based next set suggestion (predicts weight/reps)
   screens/
     WorkoutScreen.tsx           — Scrollable exercise list for a workout day
 cutting_routine_v6.md          — Source workout programme (markdown)
@@ -82,6 +84,17 @@ Each exercise has a progression rule parsed from the original programme:
 - **Generic fallback:** All working sets hit the top of the rep range (e.g., all sets at 8 in a 5-8 range) — weight increases by 2.5 kg
 
 After progression triggers, the new weight is stored and displayed in the set table for the next session.
+
+## Next Set Suggestion
+
+After logging a working set, the app predicts the next working set's weight and reps:
+- Estimates max capacity from logged reps + RIR (derived from target RPE)
+- Applies 5% inter-set fatigue factor
+- Predicts reps at the next set's target RPE using `floor(fatigueAdjustedMax - nextRIR)`
+- Clamps to the exercise's rep range
+- Drops weight by 2.5 kg if predicted reps fall below the rep range minimum
+
+Suggested values show with an amber border and "auto" label. The user can edit them freely.
 
 ## Based On
 

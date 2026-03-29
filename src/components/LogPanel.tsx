@@ -10,6 +10,7 @@ import {
 import { Exercise, ExerciseSet } from '../data/exercises';
 import { ExerciseLog, SetLog, saveLog } from '../utils/storage';
 import { checkProgression, getEffectiveWeight } from '../utils/progression';
+import { suggestNextSet, findNextWorkingSetIndex, isBWExercise } from '../utils/suggestion';
 import { colors } from '../theme';
 
 interface Props {
@@ -62,6 +63,9 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     allSets.map(() => '')
   );
   const [loggedSets, setLoggedSets] = useState<boolean[]>(() =>
+    new Array(allSets.length).fill(false)
+  );
+  const [suggestedSets, setSuggestedSets] = useState<boolean[]>(() =>
     new Array(allSets.length).fill(false)
   );
 
@@ -209,6 +213,42 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     if (index < allSets.length - 1) {
       startTimer(index);
     }
+
+    // Auto-suggest next working set
+    if (allSets[index].type === 'working') {
+      const nextIdx = findNextWorkingSetIndex(allSets, index);
+      if (nextIdx !== -1 && !nextLogged[nextIdx]) {
+        const suggestion = suggestNextSet(
+          parseFloat(weightInputs[index]) || 0,
+          parseInt(repsInputs[index]) || 0,
+          allSets[index],
+          allSets[nextIdx],
+          exercise.repRange,
+          isBWExercise(allSets),
+        );
+        if (suggestion) {
+          setWeightInputs((prev) => {
+            const next = [...prev];
+            next[nextIdx] = String(suggestion.weight);
+            return next;
+          });
+          setRepsInputs((prev) => {
+            const next = [...prev];
+            next[nextIdx] = String(suggestion.reps);
+            return next;
+          });
+          setSuggestedSets((prev) => {
+            const next = [...prev];
+            next[nextIdx] = true;
+            return next;
+          });
+          if (suggestion.weightDropped) {
+            setFeedback(`Dropped to ${suggestion.weight} kg to stay in rep range`);
+            setFeedbackType('progress');
+          }
+        }
+      }
+    }
   };
 
   /** Undo a logged set — re-enables inputs for correction */
@@ -219,6 +259,28 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     setLoggedSets(nextLogged);
 
     await persistSession(nextLogged);
+
+    // Clear suggestion on the next working set if it was auto-filled
+    if (allSets[index].type === 'working') {
+      const nextIdx = findNextWorkingSetIndex(allSets, index);
+      if (nextIdx !== -1 && suggestedSets[nextIdx] && !nextLogged[nextIdx]) {
+        setWeightInputs((prev) => {
+          const next = [...prev];
+          next[nextIdx] = String(effectiveWeight);
+          return next;
+        });
+        setRepsInputs((prev) => {
+          const next = [...prev];
+          next[nextIdx] = '';
+          return next;
+        });
+        setSuggestedSets((prev) => {
+          const next = [...prev];
+          next[nextIdx] = false;
+          return next;
+        });
+      }
+    }
   };
 
   const handleNewSession = () => {
@@ -229,6 +291,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
         s.type === 'working' ? String(getEffectiveWeight(exercise, log)) : parseWeight(s.weight)
       )
     );
+    setSuggestedSets(new Array(allSets.length).fill(false));
     sessionRef.current = false;
     setFeedback(null);
     skipTimer();
@@ -294,6 +357,8 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
         const lastSet = getLastSessionSet(i, set.type);
         const isActive = !isLogged;
 
+        const isSuggested = suggestedSets[i] && !isLogged;
+
         return (
           <View
             key={i}
@@ -345,6 +410,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
                 set.type === 'warmup' && styles.inputWarmup,
                 set.type === 'feeler' && styles.inputFeeler,
                 set.type === 'working' && styles.inputWorking,
+                isSuggested && styles.inputSuggested,
                 isLogged && styles.inputLogged,
               ]}
               keyboardType="decimal-pad"
@@ -353,6 +419,13 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
                 const next = [...weightInputs];
                 next[i] = val;
                 setWeightInputs(next);
+                if (suggestedSets[i]) {
+                  setSuggestedSets((prev) => {
+                    const n = [...prev];
+                    n[i] = false;
+                    return n;
+                  });
+                }
               }}
               editable={isActive}
               selectTextOnFocus
@@ -361,26 +434,39 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
             <Text style={styles.timesLabel}>×</Text>
 
             {/* Reps input */}
-            <TextInput
-              style={[
-                styles.repsInput,
-                set.type === 'warmup' && styles.inputWarmup,
-                set.type === 'feeler' && styles.inputFeeler,
-                set.type === 'working' && styles.inputWorking,
-                isLogged && styles.inputLogged,
-              ]}
-              keyboardType="numeric"
-              placeholder={set.reps.replace('–', '-')}
-              placeholderTextColor={colors.textMuted}
-              value={repsInputs[i]}
-              onChangeText={(val) => {
-                const next = [...repsInputs];
-                next[i] = val;
-                setRepsInputs(next);
-              }}
-              editable={isActive}
-              selectTextOnFocus
-            />
+            <View>
+              <TextInput
+                style={[
+                  styles.repsInput,
+                  set.type === 'warmup' && styles.inputWarmup,
+                  set.type === 'feeler' && styles.inputFeeler,
+                  set.type === 'working' && styles.inputWorking,
+                  isSuggested && styles.inputSuggested,
+                  isLogged && styles.inputLogged,
+                ]}
+                keyboardType="numeric"
+                placeholder={set.reps.replace('–', '-')}
+                placeholderTextColor={colors.textMuted}
+                value={repsInputs[i]}
+                onChangeText={(val) => {
+                  const next = [...repsInputs];
+                  next[i] = val;
+                  setRepsInputs(next);
+                  if (suggestedSets[i]) {
+                    setSuggestedSets((prev) => {
+                      const n = [...prev];
+                      n[i] = false;
+                      return n;
+                    });
+                  }
+                }}
+                editable={isActive}
+                selectTextOnFocus
+              />
+              {isSuggested && (
+                <Text style={styles.suggestedHint}>auto</Text>
+              )}
+            </View>
 
             {/* Last session comparison */}
             {lastSet && (
@@ -692,9 +778,19 @@ const styles = StyleSheet.create({
   inputWorking: {
     borderColor: 'rgba(52,211,153,0.3)',
   },
+  inputSuggested: {
+    borderColor: 'rgba(245,158,11,0.35)',
+  },
   inputLogged: {
     backgroundColor: colors.surface2,
     borderColor: 'rgba(255,255,255,0.05)',
+  },
+  suggestedHint: {
+    fontSize: 8,
+    color: colors.amber,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 1,
   },
   lastSetHint: {
     fontSize: 10,
