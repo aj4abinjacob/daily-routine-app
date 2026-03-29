@@ -29,116 +29,124 @@ interface Props {
 
 export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const effectiveWeight = getEffectiveWeight(exercise, log);
   const defaultWeight = getEffectiveWeight(exercise, null);
   const isProgressed = effectiveWeight !== defaultWeight;
 
-  const toggle = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(!expanded);
-  };
-
-  const toggleLog = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setLogOpen(!logOpen);
-  };
-
+  const workingSets = exercise.sets.filter((s) => s.type === 'working');
   const lastSession = log?.logs?.[log.logs.length - 1];
   const hasLog = !!lastSession;
 
+  const toggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpanded(!expanded);
+    if (expanded) setShowInfo(false);
+  };
+
+  const toggleInfo = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setShowInfo(!showInfo);
+  };
+
+  // Build compact target summary: "3 work × 5-8 @ 42.5 kg"
+  const warmupCount = exercise.sets.filter((s) => s.type === 'warmup' || s.type === 'feeler').length;
+  const targetReps = workingSets.length > 0 ? workingSets[0].reps : '';
+  const targetSummary = `${workingSets.length}×${targetReps} @ ${effectiveWeight} kg`;
+  const setsLabel = `${exercise.sets.length} sets`;
+
   return (
-    <View style={styles.card}>
-      {/* Header */}
+    <View style={[styles.card, hasLog && styles.cardLogged]}>
+      {/* Header — compact, info-dense */}
       <TouchableOpacity
         style={styles.header}
         onPress={toggle}
         activeOpacity={0.7}
       >
-        <View style={styles.headerLeft}>
-          <View style={styles.numBadge}>
-            <Text style={styles.numText}>{exercise.num}</Text>
-          </View>
-          <View style={styles.nameContainer}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.numBadge, hasLog && styles.numBadgeLogged]}>
+              <Text style={[styles.numText, hasLog && styles.numTextLogged]}>
+                {hasLog ? '✓' : exercise.num}
+              </Text>
+            </View>
             <Text style={styles.name} numberOfLines={1}>
               {exercise.name}
             </Text>
-            {exercise.supersetWith && (
-              <Text style={styles.superset}>{exercise.supersetWith}</Text>
-            )}
           </View>
+          <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
         </View>
-        <View style={styles.headerRight}>
-          {hasLog && (
-            <View style={styles.loggedBadge}>
-              <Text style={styles.loggedBadgeText}>✓</Text>
-            </View>
-          )}
+
+        {/* Subtitle row: set count + target + badges */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.setsCount}>{setsLabel}</Text>
+          <Text style={styles.target}>{targetSummary}</Text>
           {isProgressed && (
             <View style={styles.progBadge}>
               <Text style={styles.progBadgeText}>↑</Text>
             </View>
           )}
-          <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
         </View>
       </TouchableOpacity>
 
-      {/* Body */}
+      {/* Expanded: Log panel FIRST, then info toggle */}
       {expanded && (
         <View style={styles.body}>
-          {/* Research note */}
-          <View style={styles.researchNote}>
-            <Text style={styles.researchNoteText}>{exercise.researchNote}</Text>
-          </View>
-
-          {/* Set table */}
-          <SetTable
-            sets={exercise.sets}
-            effectiveWeight={isProgressed ? effectiveWeight : null}
+          {/* Log panel — immediately visible */}
+          <LogPanel
+            exercise={exercise}
+            dayId={dayId}
+            exIndex={exIndex}
+            log={log}
+            onLogSaved={onLogSaved}
           />
 
-          {/* Form tips */}
-          {exercise.formTips.length > 0 && (
-            <View style={styles.formTip}>
-              <Text style={styles.formTipHeader}>Form cues:</Text>
-              {exercise.formTips.map((tip, i) => (
-                <Text key={i} style={styles.formTipItem}>
-                  • {tip}
-                </Text>
-              ))}
-            </View>
-          )}
-
-          {/* Progression tip (static) */}
-          {exercise.progression && (
-            <View style={styles.tipRow}>
-              <Text style={styles.tipRowText}>
-                ↳ {exercise.progression.rawText}
-              </Text>
-            </View>
-          )}
-
-          {/* Log toggle */}
+          {/* Info toggle */}
           <TouchableOpacity
-            style={styles.logToggle}
-            onPress={toggleLog}
+            style={styles.infoToggle}
+            onPress={toggleInfo}
             activeOpacity={0.7}
           >
-            <Text style={styles.logToggleText}>Log Workout</Text>
-            <Text style={styles.logToggleChevron}>
-              {logOpen ? '▲' : '▼'}
+            <Text style={styles.infoToggleText}>
+              {showInfo ? '▲ Hide details' : '▼ Set table, form cues & notes'}
             </Text>
           </TouchableOpacity>
 
-          {/* Log panel */}
-          {logOpen && (
-            <LogPanel
-              exercise={exercise}
-              dayId={dayId}
-              exIndex={exIndex}
-              log={log}
-              onLogSaved={onLogSaved}
-            />
+          {/* Reference info — hidden by default */}
+          {showInfo && (
+            <View style={styles.infoSection}>
+              {/* Set table */}
+              <SetTable
+                sets={exercise.sets}
+                effectiveWeight={isProgressed ? effectiveWeight : null}
+              />
+
+              {/* Form tips */}
+              {exercise.formTips.length > 0 && (
+                <View style={styles.formTip}>
+                  <Text style={styles.formTipHeader}>Form cues</Text>
+                  {exercise.formTips.map((tip, i) => (
+                    <Text key={i} style={styles.formTipItem}>
+                      • {tip}
+                    </Text>
+                  ))}
+                </View>
+              )}
+
+              {/* Research note */}
+              <View style={styles.researchNote}>
+                <Text style={styles.researchNoteText}>{exercise.researchNote}</Text>
+              </View>
+
+              {/* Progression tip */}
+              {exercise.progression && (
+                <View style={styles.tipRow}>
+                  <Text style={styles.tipRowText}>
+                    {exercise.progression.rawText}
+                  </Text>
+                </View>
+              )}
+            </View>
           )}
         </View>
       )}
@@ -150,16 +158,22 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: 10,
-    marginBottom: 10,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
   },
+  cardLogged: {
+    borderColor: 'rgba(52,211,153,0.2)',
+  },
   header: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 14,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -168,14 +182,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   numBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.amberBg,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(245,158,11,0.15)',
+  },
+  numBadgeLogged: {
+    backgroundColor: 'rgba(52,211,153,0.12)',
+    borderColor: 'rgba(52,211,153,0.25)',
   },
   numText: {
     fontSize: 12,
@@ -183,119 +201,116 @@ const styles = StyleSheet.create({
     color: colors.amber,
     fontFamily: 'monospace',
   },
-  nameContainer: {
-    flex: 1,
+  numTextLogged: {
+    color: colors.green,
+    fontSize: 13,
   },
   name: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
-  },
-  superset: {
-    fontSize: 11,
-    color: colors.cyan,
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  loggedBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(52,211,153,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loggedBadgeText: {
-    fontSize: 10,
-    color: colors.green,
-    fontWeight: '700',
-  },
-  progBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(52,211,153,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progBadgeText: {
-    fontSize: 12,
-    color: colors.green,
-    fontWeight: '700',
+    flex: 1,
   },
   chevron: {
     fontSize: 10,
     color: colors.textMuted,
-    marginLeft: 4,
+    marginLeft: 8,
+  },
+  subtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginLeft: 38, // align with name (badge width + gap)
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  target: {
+    fontSize: 13,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+    color: colors.amber,
+  },
+  progBadge: {
+    backgroundColor: 'rgba(52,211,153,0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(52,211,153,0.2)',
+  },
+  progBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.green,
+  },
+  setsCount: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   body: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  infoToggle: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surface2,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  infoToggleText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  infoSection: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
   researchNote: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: colors.blueBg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(96,165,250,0.08)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(96,165,250,0.08)',
   },
   researchNoteText: {
     fontSize: 11,
     color: colors.blue,
-    lineHeight: 16,
+    lineHeight: 15,
   },
   formTip: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: colors.greenBg,
     borderTopWidth: 1,
     borderTopColor: 'rgba(52,211,153,0.08)',
   },
   formTipHeader: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: colors.green,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   formTipItem: {
     fontSize: 11,
     color: colors.green,
-    lineHeight: 17,
-    marginBottom: 3,
+    lineHeight: 15,
+    marginBottom: 2,
     paddingLeft: 4,
   },
   tipRow: {
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     backgroundColor: colors.orangeBg,
     borderTopWidth: 1,
     borderTopColor: 'rgba(251,146,60,0.08)',
   },
   tipRowText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.orange,
     fontWeight: '500',
-  },
-  logToggle: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    backgroundColor: 'rgba(52,211,153,0.04)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(52,211,153,0.1)',
-  },
-  logToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.green,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  logToggleChevron: {
-    fontSize: 10,
-    color: colors.textMuted,
   },
 });

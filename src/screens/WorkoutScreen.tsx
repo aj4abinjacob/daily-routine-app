@@ -42,8 +42,8 @@ export default function WorkoutScreen({ day }: Props) {
     });
   };
 
-  // Count logged exercises
   const loggedCount = logs.filter((l) => l?.logs?.length).length;
+  const total = day.exercises.length;
 
   return (
     <ScrollView
@@ -57,15 +57,28 @@ export default function WorkoutScreen({ day }: Props) {
         />
       }
     >
-      {/* Day header */}
+      {/* Compact header with progress bar */}
       <View style={styles.header}>
-        <Text style={styles.label}>{day.label}</Text>
-        <Text style={styles.title}>{day.title}</Text>
-        {loggedCount > 0 && (
-          <Text style={styles.progress}>
-            {loggedCount}/{day.exercises.length} exercises logged
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>{day.title}</Text>
+          </View>
+          <Text style={styles.progressText}>
+            {loggedCount}/{total}
           </Text>
-        )}
+        </View>
+        {/* Progress bar */}
+        <View style={styles.progressBar}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: total > 0 ? `${(loggedCount / total) * 100}%` : '0%',
+                backgroundColor: loggedCount === total ? colors.green : colors.amber,
+              },
+            ]}
+          />
+        </View>
       </View>
 
       {/* Exercise cards */}
@@ -80,7 +93,7 @@ export default function WorkoutScreen({ day }: Props) {
         />
       ))}
 
-      <View style={{ height: 40 }} />
+      <View style={{ height: 30 }} />
     </ScrollView>
   );
 }
@@ -91,29 +104,38 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   content: {
-    padding: 16,
+    padding: 12,
+    paddingTop: 8,
   },
   header: {
-    marginBottom: 18,
+    marginBottom: 12,
   },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
   },
   title: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '800',
     color: colors.text,
     letterSpacing: -0.3,
   },
-  progress: {
-    fontSize: 12,
-    color: colors.green,
-    fontWeight: '600',
-    marginTop: 4,
+  progressText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.amber,
+    fontFamily: 'monospace',
+  },
+  progressBar: {
+    height: 3,
+    backgroundColor: colors.surface2,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
   },
 });

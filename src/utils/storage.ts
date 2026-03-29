@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export interface SetLog {
   weight: number;
   reps: number;
+  type?: 'warmup' | 'feeler' | 'working'; // added — older logs won't have this
 }
 
 export interface SessionLog {

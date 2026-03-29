@@ -5,7 +5,7 @@ import { colors, rpeColor, badgeColor } from '../theme';
 
 interface Props {
   sets: ExerciseSet[];
-  effectiveWeight: number | null; // overridden weight for working sets
+  effectiveWeight: number | null;
 }
 
 export default function SetTable({ sets, effectiveWeight }: Props) {
@@ -13,11 +13,11 @@ export default function SetTable({ sets, effectiveWeight }: Props) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.headerRow}>
+        <Text style={[styles.headerCell, styles.colType]}>Type</Text>
         <Text style={[styles.headerCell, styles.colWeight]}>Weight</Text>
         <Text style={[styles.headerCell, styles.colReps]}>Reps</Text>
         <Text style={[styles.headerCell, styles.colRest]}>Rest</Text>
         <Text style={[styles.headerCell, styles.colRpe]}>RPE</Text>
-        <Text style={[styles.headerCell, styles.colType]}>Type</Text>
       </View>
       {/* Rows */}
       {sets.map((set, i) => {
@@ -28,7 +28,24 @@ export default function SetTable({ sets, effectiveWeight }: Props) {
             : set.weight;
 
         return (
-          <View key={i} style={[styles.row, i % 2 === 1 && styles.rowAlt]}>
+          <View
+            key={i}
+            style={[
+              styles.row,
+              set.type === 'working' && styles.rowWorking,
+            ]}
+          >
+            <View style={[styles.colType]}>
+              <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.badgeText, { color: badge.text }]}>
+                  {set.type === 'warmup'
+                    ? 'Warm'
+                    : set.type === 'feeler'
+                    ? 'Feel'
+                    : 'Work'}
+                </Text>
+              </View>
+            </View>
             <Text style={[styles.cell, styles.colWeight, styles.mono]}>
               {displayWeight}
             </Text>
@@ -48,15 +65,6 @@ export default function SetTable({ sets, effectiveWeight }: Props) {
             >
               {set.rpe}
             </Text>
-            <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.badgeText, { color: badge.text }]}>
-                {set.type === 'warmup'
-                  ? 'Warm'
-                  : set.type === 'feeler'
-                  ? 'Feel'
-                  : 'Work'}
-              </Text>
-            </View>
           </View>
         );
       })}
@@ -66,6 +74,7 @@ export default function SetTable({ sets, effectiveWeight }: Props) {
 
 const styles = StyleSheet.create({
   container: {
+    margin: 10,
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
@@ -74,8 +83,8 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     backgroundColor: colors.surface2,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
   },
   headerCell: {
     fontSize: 10,
@@ -86,17 +95,17 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
-  rowAlt: {
-    backgroundColor: 'rgba(255,255,255,0.015)',
+  rowWorking: {
+    backgroundColor: 'rgba(52,211,153,0.03)',
   },
   cell: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.text,
   },
   mono: {
@@ -107,19 +116,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted,
   },
-  colWeight: { flex: 2.2, minWidth: 70 },
-  colReps: { flex: 1.2, minWidth: 40 },
-  colRest: { flex: 1.5, minWidth: 45 },
-  colRpe: { flex: 1, minWidth: 30 },
-  colType: { flex: 1, minWidth: 40 },
+  colType: { width: 42 },
+  colWeight: { flex: 2, minWidth: 65 },
+  colReps: { flex: 1.2, minWidth: 35 },
+  colRest: { flex: 1.3, minWidth: 40 },
+  colRpe: { flex: 0.8, minWidth: 28 },
   badge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
+    alignSelf: 'flex-start',
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
