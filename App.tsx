@@ -2,19 +2,51 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Text } from 'react-native';
 import { workoutDays } from './src/data/exercises';
 import HomeScreen from './src/screens/HomeScreen';
 import WorkoutScreen from './src/screens/WorkoutScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { colors } from './src/theme';
 
-type RootStackParamList = {
-  Home: undefined;
+type HomeStackParamList = {
+  HomeList: undefined;
   Workout: { dayIndex: number };
-  History: undefined;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<HomeStackParamList>();
+const Tab = createBottomTabNavigator();
+
+const stackScreenOptions = {
+  headerStyle: { backgroundColor: colors.surface },
+  headerTintColor: colors.amber,
+  headerTitleStyle: { fontWeight: '700' as const, fontSize: 15, color: colors.text },
+};
+
+function HomeStack() {
+  return (
+    <Stack.Navigator screenOptions={stackScreenOptions}>
+      <Stack.Screen
+        name="HomeList"
+        component={HomeScreen}
+        options={{ title: '4-Day Cutting Programme' }}
+      />
+      <Stack.Screen
+        name="Workout"
+        options={({ route }) => {
+          const day = workoutDays[route.params.dayIndex];
+          return { title: day?.title ?? 'Workout' };
+        }}
+      >
+        {({ route }) => {
+          const day = workoutDays[route.params.dayIndex];
+          return <WorkoutScreen day={day} />;
+        }}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+}
 
 const DarkTheme = {
   ...DefaultTheme,
@@ -32,36 +64,43 @@ export default function App() {
   return (
     <NavigationContainer theme={DarkTheme}>
       <StatusBar style="light" />
-      <Stack.Navigator
+      <Tab.Navigator
         screenOptions={{
-          headerStyle: { backgroundColor: colors.surface },
-          headerTintColor: colors.amber,
-          headerTitleStyle: { fontWeight: '700', fontSize: 15, color: colors.text },
+          headerShown: false,
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+          },
+          tabBarActiveTintColor: colors.amber,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         }}
       >
-        <Stack.Screen
+        <Tab.Screen
           name="Home"
-          component={HomeScreen}
-          options={{ title: '4-Day Cutting Programme' }}
+          component={HomeStack}
+          options={{
+            tabBarLabel: 'Workout',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ color, fontSize: size - 4 }}>🏋</Text>
+            ),
+          }}
         />
-        <Stack.Screen
-          name="Workout"
-          options={({ route }) => {
-            const day = workoutDays[route.params.dayIndex];
-            return { title: day?.title ?? 'Workout' };
-          }}
-        >
-          {({ route }) => {
-            const day = workoutDays[route.params.dayIndex];
-            return <WorkoutScreen day={day} />;
-          }}
-        </Stack.Screen>
-        <Stack.Screen
+        <Tab.Screen
           name="History"
           component={HistoryScreen}
-          options={{ title: 'Workout History' }}
+          options={{
+            title: 'History',
+            headerShown: true,
+            headerStyle: { backgroundColor: colors.surface },
+            headerTintColor: colors.amber,
+            headerTitleStyle: { fontWeight: '700', fontSize: 15, color: colors.text },
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ color, fontSize: size - 4 }}>📋</Text>
+            ),
+          }}
         />
-      </Stack.Navigator>
+      </Tab.Navigator>
     </NavigationContainer>
   );
 }

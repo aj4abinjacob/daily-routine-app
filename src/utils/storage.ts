@@ -111,3 +111,23 @@ export async function loadHistory(
   sessions.sort((a, b) => b.date.localeCompare(a.date));
   return sessions;
 }
+
+/** Delete a session by removing its dated entry from every exercise log for that day */
+export async function deleteSession(
+  dayId: string,
+  dateKey: string, // YYYY-MM-DD
+  exerciseCount: number,
+): Promise<void> {
+  for (let i = 0; i < exerciseCount; i++) {
+    const log = await loadLog(dayId, i);
+    if (!log?.logs?.length) continue;
+
+    const filtered = log.logs.filter(
+      (s) => s.date.slice(0, 10) !== dateKey,
+    );
+    if (filtered.length !== log.logs.length) {
+      log.logs = filtered;
+      await saveLog(dayId, i, log);
+    }
+  }
+}

@@ -9,9 +9,10 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Alert,
 } from 'react-native';
 import { workoutDays } from '../data/exercises';
-import { HistorySession, loadHistory } from '../utils/storage';
+import { HistorySession, loadHistory, deleteSession } from '../utils/storage';
 import { colors } from '../theme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -69,6 +70,29 @@ export default function HistoryScreen() {
   const toggle = (idx: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedIdx(expandedIdx === idx ? null : idx);
+  };
+
+  const handleDelete = (session: HistorySession) => {
+    const dayData = workoutDays.find((d) => d.id === session.dayId);
+    if (!dayData) return;
+
+    Alert.alert(
+      'Delete session?',
+      `${formatDate(session.date)} — ${session.dayTitle}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteSession(session.dayId, session.date, dayData.exercises.length);
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExpandedIdx(null);
+            await load();
+          },
+        },
+      ],
+    );
   };
 
   if (!sessions.length) {
@@ -207,6 +231,15 @@ export default function HistoryScreen() {
                     {formatVolume(session.totalVolume)}
                   </Text>
                 </View>
+
+                {/* Delete button */}
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => handleDelete(session)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.deleteBtnText}>Delete Session</Text>
+                </TouchableOpacity>
               </View>
             )}
           </TouchableOpacity>
@@ -407,5 +440,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: 'monospace',
     color: colors.amber,
+  },
+
+  // Delete
+  deleteBtn: {
+    backgroundColor: colors.redBg,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.2)',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  deleteBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.red,
   },
 });
