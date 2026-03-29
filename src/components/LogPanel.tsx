@@ -35,7 +35,7 @@ function parseRestSeconds(rest: string): number {
   return isNaN(num) ? 60 : num;
 }
 
-/** Parse weight string like "42.5 kg", "BW", "12.5 kg" into a number (0 for BW) */
+/** Parse weight string like "42.5 kg", "BW", "12.5 kg" into a number string */
 function parseWeight(w: string): string {
   const match = w.match(/[\d.]+/);
   return match ? match[0] : '0';
@@ -52,7 +52,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
   const allSets = exercise.sets;
   const effectiveWeight = getEffectiveWeight(exercise, log);
 
-  // Per-set input state: weight and reps for every set
+  // Per-set input state
   const [weightInputs, setWeightInputs] = useState<string[]>(() =>
     allSets.map((s) =>
       s.type === 'working' ? String(effectiveWeight) : parseWeight(s.weight)
@@ -61,7 +61,6 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
   const [repsInputs, setRepsInputs] = useState<string[]>(() =>
     allSets.map(() => '')
   );
-  // Track which sets are logged this session
   const [loggedSets, setLoggedSets] = useState<boolean[]>(() =>
     new Array(allSets.length).fill(false)
   );
@@ -75,9 +74,6 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
   // Feedback
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<'success' | 'progress' | 'error'>('success');
-
-  // Session saved state
-  const [sessionSaved, setSessionSaved] = useState(false);
 
   const lastSession = log?.logs?.[log.logs.length - 1] ?? null;
 
@@ -127,7 +123,8 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
     setTimerSeconds((prev) => prev + extra);
   };
 
-  const handleLogSet = (index: number) => {
+  /** Log a single set — persists to storage immediately */
+  const handleLogSet = async (index: number) => {
     const r = parseInt(repsInputs[index]);
     const w = parseFloat(weightInputs[index]);
     if (!r || r <= 0) {
@@ -135,28 +132,23 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       setFeedbackType('error');
       return;
     }
-    if (!w && w !== 0) {
+    if (isNaN(w)) {
       setFeedback('Enter weight');
       setFeedbackType('error');
       return;
     }
 
     setFeedback(null);
-    const next = [...loggedSets];
-    next[index] = true;
-    setLoggedSets(next);
 
-    // Start rest timer (unless it's the last set)
-    if (index < allSets.length - 1) {
-      startTimer(index);
-    }
-  };
+    // Mark this set as logged
+    const nextLogged = [...loggedSets];
+    nextLogged[index] = true;
+    setLoggedSets(nextLogged);
 
-  const handleSaveSession = async () => {
-    // Collect all logged sets
+    // Build the full set list from all currently logged sets (including this one)
     const sets: SetLog[] = [];
     for (let i = 0; i < allSets.length; i++) {
-      if (!loggedSets[i]) continue;
+      if (!nextLogged[i]) continue;
       sets.push({
         reps: parseInt(repsInputs[i]) || 0,
         weight: parseFloat(weightInputs[i]) || 0,
@@ -164,42 +156,51 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       });
     }
 
-    if (sets.length === 0) {
-      setFeedback('Log at least one set first');
-      setFeedbackType('error');
-      return;
-    }
-
+    // Build or update the current session in storage
     const data: ExerciseLog = log
       ? { ...log, logs: [...log.logs] }
       : { logs: [], currentWeight: null };
 
-    data.logs.push({ date: new Date().toISOString(), sets });
+    // If this is the first set logged, create a new session entry
+    // Otherwise update the last session (the one we're building)
+    const isFirstSet = nextLogged.filter(Boolean).length === 1;
+    if (isFirstSet) {
+      data.logs.push({ date: new Date().toISOString(), sets });
+    } else {
+      // Replace the in-progress session
+      data.logs[data.logs.length - 1] = {
+        date: data.logs[data.logs.length - 1]?.date ?? new Date().toISOString(),
+        sets,
+      };
+    }
     if (data.logs.length > 8) data.logs = data.logs.slice(-8);
 
-    // Check progression (only working sets)
-    const workingSets = sets.filter((s) => s.type === 'working');
-    if (workingSets.length > 0) {
+    // Check if all working sets are now logged → check progression
+    const allWorkingIndices = allSets
+      .map((s, i) => (s.type === 'working' ? i : -1))
+      .filter((i) => i >= 0);
+    const allWorkingLogged = allWorkingIndices.every((i) => nextLogged[i]);
+
+    if (allWorkingLogged && allWorkingIndices.length > 0) {
+      const workingSets = sets.filter((s) => s.type === 'working');
       const result = checkProgression(exercise, data, workingSets);
       if (result.triggered && result.newWeight) {
         data.currentWeight = result.newWeight;
         setFeedback(result.message);
         setFeedbackType('progress');
-      } else {
-        setFeedback('Session saved');
-        setFeedbackType('success');
       }
-    } else {
-      setFeedback('Session saved');
-      setFeedbackType('success');
     }
 
     await saveLog(dayId, exIndex, data);
     onLogSaved(data);
-    setSessionSaved(true);
+
+    // Start rest timer (unless it's the last set)
+    if (index < allSets.length - 1) {
+      startTimer(index);
+    }
   };
 
-  const handleReset = () => {
+  const handleNewSession = () => {
     setLoggedSets(new Array(allSets.length).fill(false));
     setRepsInputs(new Array(allSets.length).fill(''));
     setWeightInputs(
@@ -207,24 +208,19 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
         s.type === 'working' ? String(getEffectiveWeight(exercise, log)) : parseWeight(s.weight)
       )
     );
-    setSessionSaved(false);
     setFeedback(null);
     skipTimer();
   };
 
   const allLogged = loggedSets.every(Boolean);
-  const someLogged = loggedSets.some(Boolean);
 
   // Find corresponding last session set for comparison
-  // Last session may have different number of sets, so we match by type+index
   const getLastSessionSet = (setIndex: number, setType: string) => {
     if (!lastSession) return null;
-    // Count how many sets of this type we've seen before this index
     let typeCount = 0;
     for (let i = 0; i < setIndex; i++) {
       if (allSets[i].type === setType) typeCount++;
     }
-    // Find the matching set in last session
     let seen = 0;
     for (const s of lastSession.sets) {
       if (s.type === setType || (!s.type && setType === 'working')) {
@@ -237,7 +233,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
 
   return (
     <View style={styles.container}>
-      {/* Rest timer overlay */}
+      {/* Rest timer */}
       {timerActive && (
         <View style={styles.timerBar}>
           <View style={styles.timerContent}>
@@ -264,7 +260,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       )}
 
       {/* Timer done notification */}
-      {!timerActive && timerSetIndex >= 0 && timerSeconds === 0 && !sessionSaved && (
+      {!timerActive && timerSetIndex >= 0 && timerSeconds === 0 && !allLogged && (
         <View style={styles.timerDone}>
           <Text style={styles.timerDoneText}>Rest complete — next set!</Text>
         </View>
@@ -274,7 +270,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       {allSets.map((set, i) => {
         const isLogged = loggedSets[i];
         const lastSet = getLastSessionSet(i, set.type);
-        const isActive = !isLogged && !sessionSaved;
+        const isActive = !isLogged;
 
         return (
           <View
@@ -285,10 +281,9 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
               set.type === 'feeler' && styles.setRowFeeler,
               set.type === 'working' && styles.setRowWorking,
               isLogged && styles.setRowLogged,
-              !isActive && !isLogged && styles.setRowDimmed,
             ]}
           >
-            {/* Set type + number */}
+            {/* Set type badge */}
             <View style={styles.setInfo}>
               <View
                 style={[
@@ -311,13 +306,11 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
                   {isLogged ? '✓' : set.type === 'warmup' ? 'W' : set.type === 'feeler' ? 'F' : 'S'}
                 </Text>
               </View>
-              {/* RPE + rest hint */}
               <View style={styles.setMeta}>
                 {set.type === 'working' && set.rpe !== '—' && (
-                  <Text style={[
-                    styles.rpeHint,
-                    set.type === 'working' && styles.rpeHintWorking,
-                  ]}>RPE {set.rpe}</Text>
+                  <Text style={[styles.rpeHint, styles.rpeHintWorking]}>
+                    RPE {set.rpe}
+                  </Text>
                 )}
                 <Text style={styles.restHint}>{set.rest}</Text>
               </View>
@@ -374,7 +367,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
               </Text>
             )}
 
-            {/* Log set button — colored by type */}
+            {/* Log set button */}
             {isActive && (
               <TouchableOpacity
                 style={[
@@ -390,7 +383,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
                   styles.logSetBtnText,
                   set.type === 'warmup' && styles.logSetBtnTextWarmup,
                   set.type === 'feeler' && styles.logSetBtnTextFeeler,
-                ]}>{set.type === 'warmup' ? 'Log' : set.type === 'feeler' ? 'Log' : 'Log'}</Text>
+                ]}>Log</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -398,7 +391,7 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
       })}
 
       {/* Last session summary */}
-      {lastSession && !sessionSaved && (
+      {lastSession && !loggedSets.some(Boolean) && (
         <View style={styles.lastSessionRow}>
           <Text style={styles.lastSessionLabel}>
             Last: {new Date(lastSession.date).toLocaleDateString('en-GB', {
@@ -444,36 +437,11 @@ export default function LogPanel({ exercise, dayId, exIndex, log, onLogSaved }: 
         </View>
       )}
 
-      {/* Save / Reset buttons */}
-      {!sessionSaved ? (
-        <View style={styles.actionRow}>
-          {someLogged && (
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={handleReset}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.resetBtnText}>Reset</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={[
-              styles.saveBtn,
-              !someLogged && styles.saveBtnDisabled,
-            ]}
-            onPress={handleSaveSession}
-            activeOpacity={0.8}
-            disabled={!someLogged}
-          >
-            <Text style={[styles.saveBtnText, !someLogged && styles.saveBtnTextDisabled]}>
-              {allLogged ? 'Save Session' : 'Save Session'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
+      {/* New session button — only after all sets are done */}
+      {allLogged && (
         <TouchableOpacity
           style={styles.newSessionBtn}
-          onPress={handleReset}
+          onPress={handleNewSession}
           activeOpacity={0.7}
         >
           <Text style={styles.newSessionBtnText}>Log New Session</Text>
@@ -560,7 +528,7 @@ const styles = StyleSheet.create({
     color: colors.green,
   },
 
-  // Set rows — colored by type
+  // Set rows
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -586,9 +554,6 @@ const styles = StyleSheet.create({
   },
   setRowLogged: {
     opacity: 0.45,
-  },
-  setRowDimmed: {
-    opacity: 0.35,
   },
   setInfo: {
     width: 46,
@@ -790,46 +755,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Action buttons
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  resetBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  resetBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textMuted,
-  },
-  saveBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: colors.green,
-    alignItems: 'center',
-  },
-  saveBtnDisabled: {
-    backgroundColor: colors.surface2,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  saveBtnText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#000',
-    letterSpacing: 0.3,
-  },
-  saveBtnTextDisabled: {
-    color: colors.textMuted,
-  },
+  // New session button
   newSessionBtn: {
     paddingVertical: 10,
     borderRadius: 8,
