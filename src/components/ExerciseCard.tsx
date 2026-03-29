@@ -25,10 +25,11 @@ interface Props {
   exIndex: number;
   log: ExerciseLog | null;
   onLogSaved: (log: ExerciseLog) => void;
+  expanded: boolean;
+  onToggle: () => void;
 }
 
-export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved }: Props) {
-  const [expanded, setExpanded] = useState(false);
+export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved, expanded, onToggle }: Props) {
   const [showInfo, setShowInfo] = useState(false);
   const effectiveWeight = getEffectiveWeight(exercise, log);
   const defaultWeight = getEffectiveWeight(exercise, null);
@@ -40,8 +41,8 @@ export default function ExerciseCard({ exercise, dayId, exIndex, log, onLogSaved
 
   const toggle = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(!expanded);
     if (expanded) setShowInfo(false);
+    onToggle();
   };
 
   const toggleInfo = () => {

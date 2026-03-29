@@ -18,6 +18,7 @@ interface Props {
 export default function WorkoutScreen({ day }: Props) {
   const [logs, setLogs] = useState<(ExerciseLog | null)[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const loadLogs = useCallback(async () => {
     const data = await loadAllLogsForDay(day.id, day.exercises.length);
@@ -90,6 +91,8 @@ export default function WorkoutScreen({ day }: Props) {
           exIndex={i}
           log={logs[i] ?? null}
           onLogSaved={(newLog) => handleLogSaved(i, newLog)}
+          expanded={expandedIndex === i}
+          onToggle={() => setExpandedIndex(expandedIndex === i ? null : i)}
         />
       ))}
 
